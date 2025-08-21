@@ -1,0 +1,2 @@
+class WaitFreeConnectionTimeoutError(TimeoutError):
+    pass
