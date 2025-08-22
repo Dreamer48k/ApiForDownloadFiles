@@ -8,7 +8,7 @@ from app.config import (ACCESS_DATABASE_HOST_REDIS,
                         ACCESS_DATABASE_NAME_REDIS,
                         ACCESS_DATABASE_CONNECTION_COUNT_REDIS)
 from app.databases.connections.redis import RedisConnectionGroup
-from .access_database import AccessDatabase
+from .access_database_methods import AccessDatabase
 #
 # from utils.security import Seccury
 

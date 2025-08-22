@@ -1,12 +1,12 @@
 # import uuid
 from datetime import datetime
 from asyncpg import Connection
-from app.config import (ACCESS_DATABASE_HOST_POSTGRES,
-                        ACCESS_DATABASE_PORT_POSTGRES,
-                        ACCESS_DATABASE_USERNAME_POSTGRES,
-                        ACCESS_DATABASE_PASSWORD_POSTGRES,
-                        ACCESS_DATABASE_NAME_POSTGRES,
-                        ACCESS_DATABASE_CONNECTION_COUNT_POSTGRES)
+from app.config import (SYSTEM_DATABASE_HOST_POSTGRES,
+                        SYSTEM_DATABASE_PORT_POSTGRES,
+                        SYSTEM_DATABASE_USERNAME_POSTGRES,
+                        SYSTEM_DATABASE_PASSWORD_POSTGRES,
+                        SYSTEM_DATABASE_NAME_POSTGRES,
+                        SYSTEM_DATABASE_CONNECTION_COUNT_POSTGRES)
 from app.databases.connections.asyncpg import AsyncpgConnectionGroup
 #
 from utils.security import Seccury
@@ -14,12 +14,12 @@ from utils.security import Seccury
 
 class AccessDatabase:
     connections = AsyncpgConnectionGroup(
-        host=ACCESS_DATABASE_HOST_POSTGRES,
-        port=int(ACCESS_DATABASE_PORT_POSTGRES),
-        user=ACCESS_DATABASE_USERNAME_POSTGRES,
-        password=ACCESS_DATABASE_PASSWORD_POSTGRES,
-        database=ACCESS_DATABASE_NAME_POSTGRES,
-        connection_count=ACCESS_DATABASE_CONNECTION_COUNT_POSTGRES
+        host=SYSTEM_DATABASE_HOST_POSTGRES,
+        port=int(SYSTEM_DATABASE_PORT_POSTGRES),
+        user=SYSTEM_DATABASE_USERNAME_POSTGRES,
+        password=SYSTEM_DATABASE_PASSWORD_POSTGRES,
+        database=SYSTEM_DATABASE_NAME_POSTGRES,
+        connection_count=SYSTEM_DATABASE_CONNECTION_COUNT_POSTGRES
     )
 
     @classmethod
@@ -29,7 +29,7 @@ class AccessDatabase:
         async with cls.connections.get_free_connection() as connection:
             fetch_sql_command = '''select
                 count(id)+1 as free_id_count
-            from access_data.users_data.''' + table_name
+            from users_data.''' + table_name
             free_id_count = await connection.fetch(fetch_sql_command)
         return [free_id for free_id, in free_id_count][0]
 
@@ -65,10 +65,32 @@ class AccessDatabase:
                     DO NOTHING
                 RETURNING id;
             ''', free_id, user_login, user_name, passwd_encrypted, created_date, is_deleted)
-            if len(return_id) > 0:
-                return 'Registration Final'
-            else:
+            if len(return_id) <= 0:
                 raise Exception("User is already exist")
+
+            create_user_role = await connection.fetch('''INSERT INTO users_data.user_role
+                    (user_id, role_id)
+                    VALUES($1, 1)
+                    RETURNING 1;
+            ''', free_id)
+
+            # переделать!!!!
+            if len(create_user_role) <= 0:
+                raise Exception("role not created")
+
+            create_parent_dir_path = await connection.fetch('''INSERT INTO users_data.users_parent_dir
+                (user_id,
+                parent_dir_path)
+                 values(
+                        $1, $2
+                    )
+                    RETURNING parent_dir_path;
+            ''', free_id, user_login)
+
+            # переделать!!!!
+            if len(create_parent_dir_path) <= 0:
+                raise Exception("Path not created")
+            return 'Registration Final '  # + ' Parent Dir ' + create_parent_dir_path[0][0]
 
     @classmethod
     async def get_user_authentication(cls,
@@ -79,11 +101,14 @@ class AccessDatabase:
 
         async with cls.connections.get_free_connection() as connection:
             hash_db_passwd = await connection.fetch(f'''
-                    select passwd_encrypted from access_data.users_data.users
+                    select passwd_encrypted from users_data.users
                     where user_login = {user_login!r}
                             and
                         is_deleted = false
                     ''')
+            if hash_db_passwd == []:
+                return False
+
             hash_db_passwd = [db_passwd for db_passwd, in hash_db_passwd][0]
             user_hash = await Seccury.verify_password(plain_password=user_passwd, hashed_password=hash_db_passwd)
             return user_hash
@@ -99,5 +124,8 @@ class AccessDatabase:
                         inner join users_data.users u on u.id = ur.user_id
                                                             and u.user_login = {user_login!r}
                     ''')
+            if role_id == []:
+                return False
+
             role_id = [id for id, in role_id][0]
             return role_id

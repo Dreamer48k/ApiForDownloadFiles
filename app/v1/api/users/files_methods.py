@@ -107,12 +107,10 @@ async def progress_bar(number: int, id_file: str):
 
 @router_users.get("/get_chank")
 def get_progress_bar(id: str):
-
-    print(data_file_dict)
     response_bar = -1
     try:
         response_bar = data_file_dict[id]
-        print(data_file_dict[id])
+        # print(data_file_dict[id])
         del data_file_dict[id]
         return JSONResponse(
             status_code=200,
@@ -120,9 +118,6 @@ def get_progress_bar(id: str):
                      'progress_bar': response_bar})
 
     except Exception as err:
-        print('err:', err)
-
         return JSONResponse(
             status_code=500,
-            content={'id': id,
-                     'progress_bar': response_bar})
+            content={'error': str(err)})

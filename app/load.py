@@ -1,6 +1,3 @@
-# import asyncio
-
-from fastapi import FastAPI
 # , Request
 # from fastapi.responses import  HTMLResponse
 # from contextlib import asynccontextmanager
@@ -12,6 +9,7 @@ from os.path import dirname
 from pathlib import Path
 
 # api methods
+from fastapi import FastAPI
 from .v1.api.admin import router_admin
 from .v1.api.users import router_users
 from .v1.api.access_systems import router_access
@@ -30,7 +28,6 @@ app = FastAPI(
 
 def load() -> None:
     for folder in API_FOLDERS:
-        # await asyncio.sleep(0)
         modules = Path(dirname(__file__), 'v1/api', folder).glob('*.py')
         modules = [f.stem
                    for f in modules
