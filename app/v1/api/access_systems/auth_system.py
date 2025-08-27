@@ -28,7 +28,7 @@ async def user_auth(user_data: UserDataAcces):
             user_login=user_login,
             user_passwd=user_passwd
         )
-        if isUser:
+        if isUser[0]:
             token_uuid = await AccessTokenDatabase.set_user_token_in_db(user_data.user_login)
             return ResponseSuccess(
                 content={'uuid4': str(token_uuid)}
@@ -36,7 +36,7 @@ async def user_auth(user_data: UserDataAcces):
         else:
             return ResponseError(
                 status_code=403,
-                message={'Error': 'User not  register'}
+                message={'Error': isUser[1]}
             )
 
     except Exception as Error:
@@ -72,7 +72,7 @@ async def registration_user(user_data: UserDataRegistration):
         )
 
 
-# разбить на разные части????
+# разбить на разные части!!!
 @router_access.get('/get_user_data')
 async def get_user_data(token_uuid: UUID):
     token_uuid = str(token_uuid)

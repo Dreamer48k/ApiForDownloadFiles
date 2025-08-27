@@ -1,4 +1,5 @@
 import redis.asyncio as redis
+import json
 from uuid import uuid4, UUID
 from datetime import datetime, timedelta
 from app.config import (ACCESS_DATABASE_HOST_REDIS,
@@ -29,9 +30,10 @@ class AccessTokenDatabase:
         """Создать токен на вход"""
         connection: redis
 
-        role_id = await AccessDatabase.get_user_role_id(login)
+        user_data = await AccessDatabase.get_user_id_and_role_id(login)
         user_data = {'login': login,
-                     'role': role_id,
+                     'user_id': user_data[login]['user_id'],
+                     'role_id':  json.dumps(user_data[login]['role_id']),
                      'b_datetime': datetime.timestamp(datetime.now()),
                      'e_datetime':  datetime.timestamp(datetime.now()+timedelta(minutes=15))}
         uuid_session = str(uuid4())
@@ -39,20 +41,16 @@ class AccessTokenDatabase:
             await connection.hset(uuid_session, mapping=user_data)
         return uuid_session
 
-        #     #assert x
-        #     x = await connection.get(uuid)
-        #     y = await connection.keys()
-        #     print('\n', x, '\n')
-        #     print('\n', y, '\n')
-
     @classmethod
     async def get_user_token_in_db(cls,
                                    uuid_session: UUID):
         """Получить данные сессии пользовтеля"""
         connection: redis
-
+        uuid_session = str(uuid_session)
         async with cls.connections.get_free_connection() as connection:
             session_data = await connection.hgetall(uuid_session)
+            if not session_data:
+                raise Exception('session_data is none')
             return session_data
 
     @classmethod

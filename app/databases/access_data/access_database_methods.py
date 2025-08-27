@@ -68,29 +68,36 @@ class AccessDatabase:
             if len(return_id) <= 0:
                 raise Exception("User is already exist")
 
-            create_user_role = await connection.fetch('''INSERT INTO users_data.user_role
-                    (user_id, role_id)
-                    VALUES($1, 1)
-                    RETURNING 1;
-            ''', free_id)
+            # переделать!
+            sql_command_create_path_and_role = f'''
+            with  user_role as (
+                    INSERT INTO users_data.user_role
+                            (user_id, role_id)
+                            VALUES({free_id!r}, 1)
+                            RETURNING 1 as result_user_role
+                ),
+                user_parent_dir as (
+                    INSERT INTO users_data.users_parent_dir
+                        (user_id,
+                        parent_dir_path)
+                        values(
+                                {free_id!r}, {user_login!r}
+                            )
+                            RETURNING 1 as  result_user_parent_dir
+                )
+                select result_user_role, result_user_parent_dir from   user_role
+                left join user_parent_dir on 1=1;
+            '''
+            result_created_user_data = await connection.fetch(sql_command_create_path_and_role)
+            result_created_user_data = [dict(data) for data in result_created_user_data][0]
+            if len(result_created_user_data.keys()) != 2:
+                raise Exception("Create user data is error")
 
-            # переделать!!!!
-            if len(create_user_role) <= 0:
-                raise Exception("role not created")
+            for key in result_created_user_data:
+                if result_created_user_data[key] != 1:
+                    raise Exception(f"Create user {key!r} is error")
 
-            create_parent_dir_path = await connection.fetch('''INSERT INTO users_data.users_parent_dir
-                (user_id,
-                parent_dir_path)
-                 values(
-                        $1, $2
-                    )
-                    RETURNING parent_dir_path;
-            ''', free_id, user_login)
-
-            # переделать!!!!
-            if len(create_parent_dir_path) <= 0:
-                raise Exception("Path not created")
-            return 'Registration Final '  # + ' Parent Dir ' + create_parent_dir_path[0][0]
+            return 'Success'
 
     @classmethod
     async def get_user_authentication(cls,
@@ -100,6 +107,7 @@ class AccessDatabase:
         connection: Connection
 
         async with cls.connections.get_free_connection() as connection:
+            # переделать!!
             hash_db_passwd = await connection.fetch(f'''
                     select passwd_encrypted from users_data.users
                     where user_login = {user_login!r}
@@ -107,25 +115,33 @@ class AccessDatabase:
                         is_deleted = false
                     ''')
             if hash_db_passwd == []:
-                return False
+                raise [False, 'User not Register']
 
             hash_db_passwd = [db_passwd for db_passwd, in hash_db_passwd][0]
             user_hash = await Seccury.verify_password(plain_password=user_passwd, hashed_password=hash_db_passwd)
-            return user_hash
+            if not user_hash:
+                return [False, 'Access Denied']
+            return [user_hash]
 
     @classmethod
-    async def get_user_role_id(cls,
-                               user_login: str):
+    async def get_user_id_and_role_id(cls, user_login: str):
         connection: Connection
         async with cls.connections.get_free_connection() as connection:
 
-            role_id = await connection.fetch(f'''
-                        select role_id  from users_data.user_role ur
+            user_data = await connection.fetch(f'''
+                        select user_id, role_id  from users_data.user_role ur
                         inner join users_data.users u on u.id = ur.user_id
                                                             and u.user_login = {user_login!r}
                     ''')
-            if role_id == []:
-                return False
+            if user_data == []:
+                raise 'User Data Not Found'
+            temp_user_data = {}
+            if len(user_data) > 1:
+                temp_data = [dict(data)['role_id'] for data in user_data]
+                temp_user_data['user_id'] = dict(user_data[0])['user_id']
+                temp_user_data['role_id'] = temp_data
+                temp_user_data[user_login] = temp_user_data
+                return temp_user_data
 
-            role_id = [id for id, in role_id][0]
-            return role_id
+            temp_user_data[user_login] = dict(user_data[0])
+            return temp_user_data
